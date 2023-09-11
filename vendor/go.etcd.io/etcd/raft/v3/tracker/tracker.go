@@ -23,6 +23,14 @@ import (
 	pb "go.etcd.io/etcd/raft/v3/raftpb"
 )
 
+const Totalstake = 100
+const Mainnode = 5
+const Halfstake = 55
+
+var (
+	Stake = Halfstake / Mainnode //平分权益
+)
+
 // Config reflects the configuration tracked in a ProgressTracker.
 type Config struct {
 	Voters quorum.JointConfig
@@ -220,8 +228,11 @@ func (p *ProgressTracker) QuorumActive() bool {
 		}
 		votes[id] = pr.RecentActive
 	})
-
-	return p.Voters.VoteResult(votes) == quorum.VoteWon
+	var otherstake int
+	if len(p.Voters.IDs())-Mainnode > 0 {
+		otherstake = (Totalstake - Halfstake) / (len(p.Voters.IDs()) - Mainnode)
+	}
+	return p.Voters.VoteResult(votes, Mainnode, Stake, otherstake) == quorum.VoteWon
 }
 
 // VoterNodes returns a sorted slice of voters.
@@ -264,11 +275,16 @@ func (p *ProgressTracker) RecordVote(id uint64, v bool) {
 
 // TallyVotes returns the number of granted and rejected Votes, and whether the
 // election outcome is known.
-func (p *ProgressTracker) TallyVotes() (granted int, rejected int, _ quorum.VoteResult) {
+func (p *ProgressTracker) TallyVotes(totalstake, mainnode, halfstake, stake int) (granted int, rejected int, _ quorum.VoteResult) {
 	// Make sure to populate granted/rejected correctly even if the Votes slice
 	// contains members no longer part of the configuration. This doesn't really
 	// matter in the way the numbers are used (they're informational), but might
 	// as well get it right.
+	var otherstake int
+	idMap := p.Voters.IDs()
+	if len(idMap)-Mainnode > 0 {
+		otherstake = (Totalstake - Halfstake) / (len(idMap) - Mainnode)
+	}
 	for id, pr := range p.Progress {
 		if pr.IsLearner {
 			continue
@@ -278,11 +294,19 @@ func (p *ProgressTracker) TallyVotes() (granted int, rejected int, _ quorum.Vote
 			continue
 		}
 		if v {
-			granted++
+			if int(id) <= mainnode {
+				granted += stake
+			} else {
+				granted += otherstake
+			}
 		} else {
-			rejected++
+			if int(id) <= mainnode {
+				rejected += stake
+			} else {
+				rejected += otherstake
+			}
 		}
 	}
-	result := p.Voters.VoteResult(p.Votes)
+	result := p.Voters.VoteResult(p.Votes, mainnode, stake, otherstake)
 	return granted, rejected, result
 }

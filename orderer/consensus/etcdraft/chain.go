@@ -353,7 +353,7 @@ func NewChain(
 }
 
 // Start instructs the orderer to begin serving the chain and keep it current.
-func (c *Chain) Start() {
+func (c *Chain) Start() { //c.Node封装了raft库的节点实例
 	c.logger.Infof("Starting Raft node")
 
 	if err := c.configureComm(); err != nil {
@@ -367,6 +367,7 @@ func (c *Chain) Start() {
 		isJoin = false
 		c.logger.Infof("Consensus-type migration detected, starting new raft node on an existing channel; height=%d", c.support.Height())
 	}
+	// 根据Chain中传递的元数据配置信息获取启动Raft节点的信息
 	c.Node.start(c.fresh, isJoin)
 
 	close(c.startC)

@@ -219,13 +219,14 @@ func StartNode(c *Config, peers []Peer) Node {
 	if len(peers) == 0 {
 		panic("no peers given; use RestartNode instead")
 	}
-	rn, err := NewRawNode(c)
+	rn, err := NewRawNode(c)   // 初始化了raft节点
 	if err != nil {
 		panic(err)
 	}
+	//这里封装了实现将配置中的所有节点加入集群，初始化的一些列操作
 	rn.Bootstrap(peers)
 
-	n := newNode(rn)
+	n := newNode(rn)   //这里定义了一系列通道，并启动
 
 	go n.run()
 	return &n
@@ -240,7 +241,7 @@ func RestartNode(c *Config) Node {
 	if err != nil {
 		panic(err)
 	}
-	n := newNode(rn)
+	n := newNode(rn)   
 	go n.run()
 	return &n
 }

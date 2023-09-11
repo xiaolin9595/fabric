@@ -175,7 +175,7 @@ func (c MajorityConfig) CommittedIndex(l AckedIndexer) Index {
 // a result indicating whether the vote is pending (i.e. neither a quorum of
 // yes/no has been reached), won (a quorum of yes has been reached), or lost (a
 // quorum of no has been reached).
-func (c MajorityConfig) VoteResult(votes map[uint64]bool) VoteResult {
+func (c MajorityConfig) VoteResult(votes map[uint64]bool, mainnode, stake, otherstake int) VoteResult {
 	if len(c) == 0 {
 		// By convention, the elections on an empty config win. This comes in
 		// handy with joint quorums because it'll make a half-populated joint
@@ -189,21 +189,32 @@ func (c MajorityConfig) VoteResult(votes map[uint64]bool) VoteResult {
 	for id := range c {
 		v, ok := votes[id]
 		if !ok {
-			missing++
+			if int(id) <= mainnode {
+				missing += stake
+			} else {
+				missing += otherstake
+			}
 			continue
 		}
 		if v {
-			ny[1]++
+			if int(id) <= mainnode {
+				ny[1] += stake
+			} else {
+				ny[1] += otherstake
+			}
 		} else {
-			ny[0]++
+			if int(id) <= mainnode {
+				ny[0] += stake
+			} else {
+				ny[1] += otherstake
+			}
 		}
 	}
-
-	q := len(c)/2 + 1
-	if ny[1] >= q {
+	q := missing + ny[0] + ny[1]
+	if 2*ny[1] > q {
 		return VoteWon
 	}
-	if ny[1]+missing >= q {
+	if 2*(ny[1]+missing) > q {
 		return VotePending
 	}
 	return VoteLost

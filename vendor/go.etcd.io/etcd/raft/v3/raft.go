@@ -116,7 +116,6 @@ func (st StateType) String() string {
 type Config struct {
 	// ID is the identity of the local raft. ID cannot be 0.
 	ID uint64
-
 	// ElectionTick is the number of Node.Tick invocations that must pass between
 	// elections. That is, if a follower does not receive any message from the
 	// leader of current term before ElectionTick has elapsed, it will become
@@ -202,7 +201,6 @@ func (c *Config) validate() error {
 	if c.ID == None {
 		return errors.New("cannot use none as id")
 	}
-
 	if c.HeartbeatTick <= 0 {
 		return errors.New("heartbeat tick must be greater than 0")
 	}
@@ -241,8 +239,7 @@ func (c *Config) validate() error {
 }
 
 type raft struct {
-	id uint64
-
+	id   uint64
 	Term uint64
 	Vote uint64
 
@@ -644,7 +641,6 @@ func (r *raft) appendEntry(es ...pb.Entry) (accepted bool) {
 // tickElection is run by followers and candidates after r.electionTimeout.
 func (r *raft) tickElection() {
 	r.electionElapsed++
-
 	if r.promotable() && r.pastElectionTimeout() {
 		r.electionElapsed = 0
 		r.Step(pb.Message{From: r.id, Type: pb.MsgHup})
@@ -834,8 +830,9 @@ func (r *raft) poll(id uint64, t pb.MessageType, v bool) (granted int, rejected 
 	} else {
 		r.logger.Infof("%x received %s rejection from %x at term %d", r.id, t, id, r.Term)
 	}
+	r.logger.Infof("getvote with %x", r.id)
 	r.prs.RecordVote(id, v)
-	return r.prs.TallyVotes()
+	return r.prs.TallyVotes(tracker.Totalstake, tracker.Mainnode, tracker.Halfstake, tracker.Stake)
 }
 
 func (r *raft) Step(m pb.Message) error {
@@ -929,7 +926,8 @@ func (r *raft) Step(m pb.Message) error {
 			// ...or this is a PreVote for a future term...
 			(m.Type == pb.MsgPreVote && m.Term > r.Term)
 		// ...and we believe the candidate is up to date.
-		if canVote && r.raftLog.isUpToDate(m.Index, m.LogTerm) {
+		//Mainnode节点之间相互投票，不给其他节点投
+		if canVote && r.raftLog.isUpToDate(m.Index, m.LogTerm) && (m.From <= tracker.Mainnode || r.id > tracker.Mainnode) {
 			// Note: it turns out that that learners must be allowed to cast votes.
 			// This seems counter- intuitive but is necessary in the situation in which
 			// a learner has been promoted (i.e. is now a voter) but has not learned
@@ -1290,8 +1288,13 @@ func stepLeader(r *raft, m pb.Message) error {
 		if r.readOnly.option != ReadOnlySafe || len(m.Context) == 0 {
 			return nil
 		}
-
-		if r.prs.Voters.VoteResult(r.readOnly.recvAck(m.From, m.Context)) != quorum.VoteWon {
+		var otherstake int
+		if (len(r.prs.Voters.IDs()) - tracker.Mainnode) > 0 {
+			otherstake = (tracker.Totalstake - tracker.Halfstake) / (len(r.prs.Voters.IDs()) - tracker.Mainnode)
+			r.logger.Infof("%d,r.prs.IDs length =%x", r.prs.Voters.IDs, len(r.prs.Voters.IDs()))
+			r.logger.Infof("%x", otherstake)
+		}
+		if r.prs.Voters.VoteResult(r.readOnly.recvAck(m.From, m.Context), tracker.Mainnode, tracker.Stake, otherstake) != quorum.VoteWon {
 			return nil
 		}
 
@@ -1392,7 +1395,7 @@ func stepCandidate(r *raft, m pb.Message) error {
 		r.handleSnapshot(m)
 	case myVoteRespType:
 		gr, rj, res := r.poll(m.From, m.Type, !m.Reject)
-		r.logger.Infof("%x has received %d %s votes and %d vote rejections", r.id, gr, m.Type, rj)
+		r.logger.Infof("%x has received %d stake %s votes and %d stake vote rejections", r.id, gr, m.Type, rj)
 		switch res {
 		case quorum.VoteWon:
 			if r.state == StatePreCandidate {
@@ -1710,7 +1713,12 @@ func (r *raft) pastElectionTimeout() bool {
 }
 
 func (r *raft) resetRandomizedElectionTimeout() {
-	r.randomizedElectionTimeout = r.electionTimeout + globalRand.Intn(r.electionTimeout)
+	if r.id <= tracker.Mainnode {
+		//前三个节点的随机超时时间更短
+		r.randomizedElectionTimeout = r.electionTimeout + globalRand.Intn(r.electionTimeout)/2
+	} else {
+		r.randomizedElectionTimeout = r.electionTimeout + globalRand.Intn(r.electionTimeout)
+	}
 }
 
 func (r *raft) sendTimeoutNow(to uint64) {

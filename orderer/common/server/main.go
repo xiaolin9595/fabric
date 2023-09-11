@@ -71,6 +71,11 @@ var (
 
 // Main is the entry point of orderer process
 func Main() {
+	logger.Info("a===1111ffff")
+	logger.Info("sdada")
+	logger.Info("changed success")
+	logger.Info("i ii ")
+	logger.Info("start orederer process")
 	fullCmd := kingpin.MustParse(app.Parse(os.Args[1:]))
 
 	// "version" command

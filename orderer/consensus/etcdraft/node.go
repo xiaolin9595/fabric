@@ -78,6 +78,7 @@ func (n *node) start(fresh, join bool) {
 			if n.config.ID == number%uint64(len(raftPeers))+1 {
 				campaign = true
 			}
+			//调用raft/node中的启动节点函数，初始化raft
 			n.Node = raft.StartNode(n.config, raftPeers)
 		}
 	} else {

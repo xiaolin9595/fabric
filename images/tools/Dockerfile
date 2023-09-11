@@ -6,7 +6,8 @@ ARG GO_VER
 ARG ALPINE_VER
 FROM golang:${GO_VER}-alpine${ALPINE_VER} as golang
 
-RUN apk add --no-cache \
+RUN sed -i "s?dl-cdn.alpinelinux.org?mirrors.aliyun.com?g" /etc/apk/repositories \
+  && apk add --no-cache \
 	bash \
 	binutils-gold \
 	gcc \
@@ -25,12 +26,14 @@ ENV FABRIC_VER ${FABRIC_VER}
 # Disable cgo when building in the container.  This will create a static binary, which can be
 # copied and run in the base alpine container without the libc/musl runtime.
 ENV CGO_ENABLED 0
+ENV GOPROXY https://goproxy.cn,direct
 
 RUN make tools GO_TAGS=${GO_TAGS}
 
 FROM golang:${GO_VER}-alpine${ALPINE_VER}
 # git is required to support `go list -m`
-RUN apk add --no-cache \
+RUN  sed -i "s?dl-cdn.alpinelinux.org?mirrors.aliyun.com?g" /etc/apk/repositories \
+  && apk add --no-cache \
 	bash \
 	git \
 	jq \

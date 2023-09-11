@@ -16,6 +16,14 @@ import (
 	raft "go.etcd.io/etcd/raft/v3"
 )
 
+const Totalstake = 100
+const Mainnode = 5
+const Halfstake = 51
+
+var (
+	Stake = Halfstake/Mainnode + 1 //平分权益
+)
+
 // Tracker periodically poll Raft Status, and update disseminator
 // so that status is populated to followers.
 type Tracker struct {

@@ -48,7 +48,7 @@
 
 ALPINE_VER ?= 3.16
 FABRIC_VER ?= 2.5.0
-
+BASE_VERSION ?=NEW
 # 3rd party image version
 # These versions are also set in the runners in ./integration/runners/
 COUCHDB_VER ?= 3.2.2
@@ -253,7 +253,7 @@ $(BUILD_DIR)/images/%/$(DUMMY):
 		--build-arg TARGETARCH=$(ARCH) \
 		--build-arg TARGETOS=linux \
 		$(BUILD_ARGS) \
-		-t $(DOCKER_NS)/fabric-$* ./$(BUILD_CONTEXT)
+		-t $(DOCKER_NS)/fabric-$*:$(BASE_VERSION) ./$(BUILD_CONTEXT)
 	@touch $@
 
 # builds release packages for the host platform

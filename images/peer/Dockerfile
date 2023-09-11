@@ -5,14 +5,16 @@
 ARG GO_VER
 ARG ALPINE_VER
 FROM alpine:${ALPINE_VER} as peer-base
-RUN apk add --no-cache tzdata
+RUN sed -i "s?dl-cdn.alpinelinux.org?mirrors.aliyun.com?g" /etc/apk/repositories \
+  && apk add --no-cache tzdata
 # set up nsswitch.conf for Go's "netgo" implementation
 # - https://github.com/golang/go/blob/go1.9.1/src/net/conf.go#L194-L275
 # - docker run --rm debian:stretch grep '^hosts:' /etc/nsswitch.conf
 RUN echo 'hosts: files dns' > /etc/nsswitch.conf
 
 FROM golang:${GO_VER}-alpine${ALPINE_VER} as golang
-RUN apk add --no-cache \
+RUN sed -i "s?dl-cdn.alpinelinux.org?mirrors.aliyun.com?g" /etc/apk/repositories \
+  && apk add --no-cache \
 	bash \
 	binutils-gold \
 	gcc \
@@ -30,6 +32,7 @@ ENV FABRIC_VER ${FABRIC_VER}
 # Disable cgo when building in the container.  This will create a static binary, which can be
 # copied and run in the base alpine container without the libc/musl runtime.
 ENV CGO_ENABLED 0
+ENV GOPROXY https://goproxy.cn,direct
 
 RUN make peer GO_TAGS=${GO_TAGS}
 RUN make ccaasbuilder
